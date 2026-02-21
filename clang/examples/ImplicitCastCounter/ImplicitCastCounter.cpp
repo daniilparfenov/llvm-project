@@ -1,5 +1,6 @@
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTConsumer.h"
+#include "clang/AST/ParentMapContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
@@ -17,11 +18,16 @@ class ImplicitCastCounterVisitor
 public:
   explicit ImplicitCastCounterVisitor(ASTContext *Context) : Context(Context) {}
 
-  const auto &getImplicitCastInfo() { return ImplicitCastInfo; }
+  const auto &getImplicitCastInfo() const { return ImplicitCastInfo; }
 
   // This method is called automatically for every ImplicitCastExpr node found
   // in the AST.
   bool VisitImplicitCastExpr(ImplicitCastExpr *Cast) {
+
+    // Skip casts in sys headers
+    if (Context->getSourceManager().isInSystemHeader(Cast->getExprLoc())) {
+      return true;
+    }
 
     // Casted types definition
     QualType SrcType = Cast->getSubExpr()->getType().getUnqualifiedType();
@@ -33,8 +39,9 @@ public:
 
     // Counting found cast
     if (SrcTypeStr != DstTypeStr) {
+      std::string castLoc = getImplicitCastLoc(Cast);
       std::string castDescription = SrcTypeStr + " -> " + DstTypeStr;
-      ImplicitCastInfo["somewhere"][castDescription]++;
+      ImplicitCastInfo[castLoc][castDescription]++;
     }
 
     return true;
@@ -42,7 +49,26 @@ public:
 
 private:
   ASTContext *Context;
+
+  // A map to store location, type and quantity of casts
   std::map<std::string, std::map<std::string, int>> ImplicitCastInfo;
+
+  // Explores a location of cast (function or not)
+  std::string getImplicitCastLoc(const ImplicitCastExpr *Cast) {
+    auto Parents = Context->getParents(*Cast);
+
+    while (!Parents.empty()) {
+      const auto &ParentNode = Parents[0];
+
+      if (const FunctionDecl *FD = ParentNode.get<FunctionDecl>()) {
+        return "Function `" + FD->getNameAsString() + "`";
+      }
+
+      Parents = Context->getParents(ParentNode);
+    }
+
+    return "Not a Function";
+  }
 };
 
 // ASTConsumer is the interface used to consume the AST produced by the Clang
