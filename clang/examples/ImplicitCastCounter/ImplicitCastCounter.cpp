@@ -39,9 +39,9 @@ public:
 
     // Counting found cast
     if (SrcTypeStr != DstTypeStr) {
-      std::string castLoc = getImplicitCastLoc(Cast);
-      std::string castDescription = SrcTypeStr + " -> " + DstTypeStr;
-      ImplicitCastInfo[castLoc][castDescription]++;
+      std::string CastLoc = getImplicitCastLoc(Cast);
+      std::string CastDescription = SrcTypeStr + " -> " + DstTypeStr;
+      ImplicitCastInfo[CastLoc][CastDescription]++;
     }
 
     return true;
@@ -99,8 +99,8 @@ public:
 class ImplicitCastCounterAction : public PluginASTAction {
 protected:
   // Creates the ASTConsumer instance.
-  virtual std::unique_ptr<ASTConsumer>
-  CreateASTConsumer(CompilerInstance &CI, llvm::StringRef) override {
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
+                                                 llvm::StringRef) override {
     return std::make_unique<ImplicitCastCounterConsumer>();
   }
 
