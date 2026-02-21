@@ -4,6 +4,9 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
 
+#include <map>
+#include <string>
+
 using namespace clang;
 
 namespace {
@@ -14,16 +17,32 @@ class ImplicitCastCounterVisitor
 public:
   explicit ImplicitCastCounterVisitor(ASTContext *Context) : Context(Context) {}
 
+  const auto &getImplicitCastInfo() { return ImplicitCastInfo; }
+
   // This method is called automatically for every ImplicitCastExpr node found
   // in the AST.
-  bool VisitImplicitCastExpr(ImplicitCastExpr *cast) {
-    cast->dump(); // Dumps the internal structure of the node to stderr
+  bool VisitImplicitCastExpr(ImplicitCastExpr *Cast) {
+
+    // Casted types definition
+    QualType SrcType = Cast->getSubExpr()->getType().getUnqualifiedType();
+    QualType DstType = Cast->getType().getUnqualifiedType();
+
+    // Converting to str
+    std::string SrcTypeStr = SrcType.getAsString();
+    std::string DstTypeStr = DstType.getAsString();
+
+    // Counting found cast
+    if (SrcTypeStr != DstTypeStr) {
+      std::string castDescription = SrcTypeStr + " -> " + DstTypeStr;
+      ImplicitCastInfo["somewhere"][castDescription]++;
+    }
 
     return true;
   }
 
 private:
   ASTContext *Context;
+  std::map<std::string, std::map<std::string, int>> ImplicitCastInfo;
 };
 
 // ASTConsumer is the interface used to consume the AST produced by the Clang
@@ -38,6 +57,15 @@ public:
 
     // Start the traversal from the root of the Translation Unit
     Visitor.TraverseDecl(Context.getTranslationUnitDecl());
+
+    // Cast info output
+    for (const auto &CastInfo : Visitor.getImplicitCastInfo()) {
+      llvm::outs() << CastInfo.first << "\n";
+      for (const auto &CastMembers : CastInfo.second) {
+        llvm::outs() << CastMembers.first << ": " << CastMembers.second << "\n";
+      }
+      llvm::outs() << "\n";
+    }
   }
 };
 
